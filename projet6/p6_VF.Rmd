@@ -1,0 +1,343 @@
+---
+title: "Projet-V1"
+author: "pauline"
+date: "30/11/2020"
+output: html_document
+---
+```{r}
+library(regression)
+
+```
+
+
+# Un premier exemple
+
+## Génération des données 
+
+Soit un modèle linéaire de la forme $Y = a_1X_1 + a_2X_2 + a_3X_3 + ...+ a_nX_n + \epsilon$
+
+On tire epsilon: 
+```{r}
+mu <- 0
+sigma <- 22 #bruit
+n= 1000 #nombre de tirages
+eps <- rnorm(n, mu,sigma) #vecteur des n epsilons
+```
+
+Initialisation des paramètres pour l'exemple
+
+```{r}
+p<- 3 #nombre de paramètres
+a1 <- 5 #valeurs du premier paramètre a1, les ai sont des multiples de a1
+a_i <- a1*(1:p) 
+coeff <- a_i #p coefficients
+```
+
+On initialise les variables X1, X2, X3,...Xn
+```{r}
+X <- matrix(0, ncol=p, nrow=n)
+for(i in 1:p){
+  X[,i] <- runif(n)
+}
+```
+
+Générer un vecteur Y tel que Y = a1X1 + a2X2 + a3X3 +...+ anXn + eps
+```{r}
+Y <- (X %*% coeff) + eps
+#Y
+```
+
+
+## Estimation
+
+Estimation des a1...an de notre exemple appelés:  a1_hat,…, an_hat = (XtX)^-1XtY
+```{r}
+hat <- solve(t(X)%*%X)%*%t(X)%*%Y
+hat
+coeff
+```
+
+
+
+## Comparaison estimation - coefficients réels
+
+
+Comparer coeff (coeffcients réels) et hat (hat: coeff estimés)
+
+```{r}
+identite <- function(coeff,hat,s){ #test : si la différence est inférieure à un seuil fixé, on considère hat_i bien estimé
+  diff <- abs(coeff - hat) #différence en valeur absolue des matrices
+  compt <- 0
+  seuil <- s
+  for(i in 1:dim(diff)[1]){
+   if(diff[i]<=seuil){
+    compt = compt +1
+   }
+  }
+return(compt)
+}
+
+seuil <-2 #choix du seuil
+identite(coeff,hat,seuil)
+
+pourcentage <- identite(coeff,hat,seuil)/length(coeff) #diff,coeff et hat ont le même nombre de lignes
+pourcentage
+
+```
+
+Comparer l'ordre des hat par rapport à coeff: on vérifie si l'ordre d'importance/d'influence des variables est bien respecté sachant que, par hypothèse, les ai (matrice coeff) sont rangés dans l'ordre croissant
+```{r}
+mean(order(hat) == order(coeff))
+
+```
+
+Génération d'un modèle linéaire lm pour notre exemple
+
+```{r}
+model<-lm(Y~X)
+summary(model)
+```
+Observations: les valeurs "estimate" sont cohérentes avec les valeurs calculées grâce à la formule 
+
+
+
+# Simulations
+
+
+Initialisation des paramètres fixes
+
+```{r}
+# Clear the console & the R environment
+cat("\014")
+rm(list = ls())
+
+N<-20 #nombre de simulations
+n= 100 #nombre de tirages par simulations
+sigma <- 22 #valeur de sigma choisie pour minimiser le bruit
+seuil <- 2 #valeur de seuil pour tester l'exactitude de l'estimation des paramètres
+
+###
+p<- 5 #nombre de coefficients
+a1 <- 5 #valeurs du premiers coefficient a1, les ai sont des multiples de a1
+a_i <- a1*(1:p) 
+coeff <- a_i #p coefficients
+###
+```
+
+création des fonctions: simulation et identité
+
+
+```{r}
+### fonction identité: test : si la différence est inférieure à un seuil fixé, on considère hat_i bien estimé##
+
+identite <- function(coeff,hat,s){ 
+  diff <- abs(coeff - hat) #différence en valeur absolue des matrices
+  compt <- 0
+  seuil <- s
+  for(i in 1:dim(diff)[1]){
+   if(diff[i]<=seuil){
+    compt = compt +1
+   }
+  }
+return(compt)
+}
+
+
+
+## fonction simulation
+
+simulation <- function(sd,coef,tirage,s){
+  
+  eps <- matrix(rnorm(tirage, 0,sd)) #matrice des n epsilons
+  
+  #initialisation des valeurs X1,...,Xn
+  X <- matrix(0, ncol=length(coef), nrow=tirage) 
+
+  for(i in 1:length(coef)){
+    X[,i] <- runif(tirage)
+  }
+
+  #initialisation des valeurs Y
+  Y <- (X %*% coef) + eps
+  
+  #estimation des coefficients
+  hat <- solve(t(X)%*%X)%*%t(X)%*%Y
+  
+  #estimation du pourcentage de coefficients considérés comme bien estimés
+  pourcentage <- identite(coef,hat,s)/length(coef) #diff,coef et hat ont le même nombre de lignes
+  
+  #estimation du pourcentage de coefficients dont l'ordre a été conservé
+  ordre <- mean(order(hat) == order(coef))
+
+  return(list(pourcent=pourcentage,order=ordre))
+}
+
+```
+
+
+On effectue des simulations
+```{r}
+res<- replicate(N, simulation(sigma,coeff,n,seuil))
+res
+```
+
+
+Affichage de ces résultats
+
+```{r, echo=FALSE}
+resultat_simu <- function(simulations){
+  #simulations
+  M <- data.frame(matrix(unlist(simulations), ncol = 2, byrow = T))
+  colnames(M) <- c("pourcent", "order")
+  print(M)
+  
+  pourcentage_moyen <-mean(M$pourcent) 
+  #pourcentage_moyen
+  ordre_moyen <- mean(M$order)
+  
+  plot(M$pourcent, type="p", col="blue",xlab="tirage",ylab="pourcentage",main="Pourcentage de paramètres bien estimées en fonction des tirages",ylim=c(0,1.2))
+  par(new=TRUE)
+  abline(h=pourcentage_moyen, col="blue")
+  legend("topleft","moyenne",col="blue",lwd=1)
+  
+  
+  plot(M$order, type="p", col="red",xlab="tirage",ylab="pourcentage",main="Pourcentage de paramètres bien ordonnés en fonction des tirages",ylim=c(0,1.2))
+  par(new=TRUE)
+  abline(h=ordre_moyen, col="red")
+  legend("topleft","moyenne",col="red",lwd=1)
+}
+resultat_simu(res)
+```
+
+
+
+## Pourquoi ce résultat?
+
+Les coefficients $a_i$ sont des estimateurs. Ils ont une distribution centrée autour de leur valeur théorique
+
+```{r}
+
+histog_simu <- function(sd,coef,tirage){
+  
+  eps <- matrix(rnorm(tirage, 0,sd)) #matrice des n epsilons
+  
+  #initialisation des valeurs X1,...,Xn
+  X <- matrix(0, ncol=length(coef), nrow=tirage) 
+
+  for(i in 1:length(coef)){
+    X[,i] <- runif(tirage)
+  }
+
+  #initialisation des valeurs Y
+  Y <- (X %*% coef) + eps
+  
+  #estimation des coefficients
+  hat <- solve(t(X)%*%X)%*%t(X)%*%Y
+
+  return(data.frame(hat))
+}
+
+M <- 200
+res<- replicate(M, histog_simu(sigma,coeff,n))
+res_histo <- do.call(rbind, res)
+library(reshape2)
+library(ggplot2)
+
+gg <- melt(res_histo)
+ggplot(gg, aes(x=value, fill=Var2)) +
+    geom_histogram(binwidth=1)+
+    facet_grid(Var2~.)
+```
+
+
+
+
+## Faire varier sigma ( choix d'un sigma inférieur à la valeur précédente)
+
+```{r}
+
+M <- 200
+sigma_inf <- 3
+res<- replicate(M, histog_simu(sigma_inf,coeff,n))
+res_histo <- do.call(rbind, res)
+library(reshape2)
+library(ggplot2)
+
+gg <- melt(res_histo)
+ggplot(gg, aes(x=value, fill=Var2)) +
+    geom_histogram(binwidth=0.3)+
+    facet_grid(Var2~.)
+```
+#Observation: Plus sigma est petit, plus l'estimation de chaque paramètre a_i est centrée autour de sa valeur nominale
+
+
+# Application avec les données abalone
+
+On évalue sigma dans ces données pour voir s'il est possible d'avoir des erreurs dans l'ordre des coefficients
+  
+```{r}
+library("AppliedPredictiveModeling")
+data(abalone)
+
+matrice <- scale(as.matrix(abalone[,2:8]))
+modele_lineaire <- lm(abalone$Rings ~ matrice)
+
+modele_lineaire <- summary(modele_lineaire)
+
+print(modele_lineaire)
+
+```
+
+Calcul/estimation de epsilon = Y - X(XtX)-1XtY
+epsilon : erreur entre une valeur estimée et une valeur réelle suit une loi normale centrée et d'écart type sigma
+```{r}
+#Y_abalone <- abalone$Rings #non centré
+#Xi_abalone <- as.matrix(abalone[,2:8]) #les valeurs ne sont pas centrées
+
+Y_abalone <- scale(abalone$Rings) #centré
+Xi_abalone <- as.matrix(scale(abalone[,2:8])) #les valeurs sont centrées
+eps_abalone <- Y_abalone - Xi_abalone%*%solve(t(Xi_abalone)%*%Xi_abalone) %*%t(Xi_abalone)%*%Y_abalone 
+sigma_abalone <- sd(eps_abalone)
+sigma_abalone
+```
+
+
+```{r}
+coeff1_abalone <- unname(modele_lineaire$coefficients[,1]) #extraction des valeurs "estimate"
+coeff_abalone <- coeff1_abalone[2:length(coeff1_abalone)] #extraction des valeurs "estimate" en enlevant intercept
+#print(coeff_abalone)
+
+faux_coeff <- seq(min(coeff_abalone), max(coeff_abalone), length.out = length(coeff_abalone))
+
+M <- 200
+res<- replicate(M, histog_simu(sigma_abalone,faux_coeff,dim(abalone)[1]))
+res_histo <- do.call(rbind, res)
+library(reshape2)
+library(ggplot2)
+
+gg <- melt(res_histo)
+ggplot(gg, aes(x=value, fill=Var2)) +
+    geom_histogram(binwidth=0.3)+
+    facet_grid(Var2~.)
+```
+#chaque valeur estimée est centrée autour d'elle même et suit une loi normale centrée et d'écart type sigma_abalone
+#Les valeurs faux_coeff sont tirées dans l'ordre croissant du min au max. On ne peut donc pas croire l'ordre des estimations.
+
+##Comparaison avec les vraies valeurs coeff_abalone
+
+```{r}
+
+M <- 200
+res<- replicate(M, histog_simu(sigma_abalone,coeff_abalone,dim(abalone)[1]))
+res_histo <- do.call(rbind, res)
+library(reshape2)
+library(ggplot2)
+
+gg <- melt(res_histo)
+ggplot(gg, aes(x=value, fill=Var2)) +
+    geom_histogram(binwidth=0.3)+
+    facet_grid(Var2~.)
+
+```
+#Conclusion sur les données réelles : On ne peut pas croire l'ordre des estimations ai
+#Les ai réels suivent une loi normale pas toujours centrée
